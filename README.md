@@ -1,34 +1,56 @@
-# redis-enterprise-asm-ingress
+# Work in Progress
 
-# Accessing a Redis Enterprise database from outside a GKE cluster (Using Anthos Service Mesh - Ingress)
+
+# Accessing a Redis Enterprise database from outside a GKE cluster (Using Nginx)
 
 ## High Level Workflow
+(Run in GCP Cloud Shell)
 The following is the high level workflow which you will follow:
 1. Create a GKE cluster
-2. Install Anthos Service Mesh
-
-
-4. Create a namespace for this deployment and deploy the Redis Enterprise Operator bundle
-5. Deploy a Redis Enterprise Cluster (REC)
-6. Deploy Nginx ingress controller
-7. Generate a SSL certificate for the Redis Enterprise database
-8. Create a Redis Enterprise database instance with SSL/TLS enabled
-9. Create an Ingress resource for the Redis Enterprise cluster for web UI access
-10. Create an Ingress resource for external traffic going into the Redis Enterprise database
-11. Verify SSL/TLS connection using openssl
-12. Connect to the Redis Enterprise database over SSL/TLS via a Python program
+2. Create a namespace for this deployment and deploy the Redis Enterprise Operator bundle
+3. Deploy a Redis Enterprise Cluster (REC)
+4. Deploy Nginx ingress controller
+5. Generate a SSL certificate for the Redis Enterprise database
+6. Create a Redis Enterprise database instance with SSL/TLS enabled
+7. Create an Ingress resource for the Redis Enterprise cluster for web UI access
+8. Create an Ingress resource for external traffic going into the Redis Enterprise database
+9. Verify SSL/TLS connection using openssl
+10. Connect to the Redis Enterprise database over SSL/TLS via a Python program
 
 
 #### 1. Create a GKE cluster
 ```
-./create_cluster.sh glau-gke-cluster us-west1-a
+export PROJECT_ID=$(gcloud info --format='value(config.project)')
+export CLUSTER_NAME="glau-asm-gke-cluster"
+export CLUSTER_LOCATION=us-west1-a
+
+./create_cluster.sh $CLUSTER_NAME $CLUSTER_LOCATION
 ```
 
-#### 2. Install Anthos Service Mesh
+#### 2. Install Anthos Service Mesh (ASM)
+Download ASM installation script
+```
+curl https://storage.googleapis.com/csm-artifacts/asm/install_asm_1.9 > install_asm
+curl https://storage.googleapis.com/csm-artifacts/asm/install_asm_1.9.sha256 > install_asm.sha256
+sha256sum -c --ignore-missing install_asm.sha256
+chmod +x install_asm
+```
+Install Anthos Service Mesh (ASM)
+```
+./install_asm \
+  --project_id $PROJECT_ID \
+  --cluster_name $CLUSTER_NAME  \
+  --cluster_location $CLUSTER_LOCATION  \
+  --mode install \
+  --output_dir ./asm-downloads \
+  --enable_all
+```
 
 
 
-#### 2. Create a namespace for this deployment and deploy the Redis Enterprise Operator bundle
+
+
+#### 3. Create a namespace for this deployment and deploy the Redis Enterprise Operator bundle
 ```
 kubectl create namespace redis
 kubectl config set-context --current --namespace=redis
@@ -37,10 +59,88 @@ kubectl apply -f https://raw.githubusercontent.com/RedisLabs/redis-enterprise-k8
 ```
 
 
-#### 3. Deploy a Redis Enterprise Cluster (REC)
+#### 4. Deploy a Redis Enterprise Cluster (REC)
 ```
 kubectl apply -f rec.yaml -n redis
 ```
+
+
+#### 5. Deploy Ingress Gateway
+Define gateway for HTTPS access:
+```
+export INGRESS_HOST=$(kubectl -n istio-system get service istio-ingressgateway \
+       -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+export SECURE_INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway \
+       -o jsonpath='{.spec.ports[?(@.name=="https")].port}')
+
+kubectl apply -f - <<EOF
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: redis-gateway
+spec:
+  selector:
+    istio: ingressgateway # use istio default ingress gateway
+  servers:
+  - port:
+      number: ${SECURE_INGRESS_PORT}
+      name: https
+      protocol: HTTPS
+    tls:
+      mode: PASSTHROUGH
+    hosts:
+    - rec-ui.${INGRESS_HOST}.nip.io
+EOF
+```
+Configure routes for traffic entering via the gateway:
+```
+kubectl apply -f - <<EOF
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: rec
+spec:
+  hosts:
+  - rec-ui.${INGRESS_HOST}.nip.io
+  gateways:
+  - redis-gateway
+  tls:
+  - match:
+    - port: ${SECURE_INGRESS_PORT}
+      sniHosts:
+      - rec-ui.${INGRESS_HOST}.nip.io
+    route:
+    - destination:
+        host: rec-ui
+        port:
+          number: 8443
+EOF
+```
+
+
+#### 6. Access Redis Enterprise Cluster's console
+Grab the password for demo@redislabs.com user for accessing REC's configuration manager (CM):
+```
+kubectl get secrets -n redis rec  -o json | jq '.data | {password}[] | @base64d'
+```
+Access the CM's login page using the following URL:
+```
+https://rec.<$INGRESS_HOST>.nip.io:443
+
+For example:
+https://rec.34.83.116.191.nip.io:443
+```
+Log in using demo@redislabs.com and the password collected above to view the cluster information in CM.
+
+
+
+
+
+
+
+
+
+
 
 
 #### 4. Deploy Nginx ingress controller
