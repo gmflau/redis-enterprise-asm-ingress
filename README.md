@@ -134,31 +134,11 @@ Log in using demo@redislabs.com and the password collected above to view the clu
 
 
 
-
-
-
-
-
-
-
-
-
-#### 4. Deploy Nginx ingress controller
-```
-kubectl apply -f nginx-ingress-controller.yaml
-```
-Grab the external IP of the Nginx ingress controller for later use:
-```
-kubectl get service/ingress-nginx-controller -n ingress-nginx \
--o jsonpath='{.status.loadBalancer.ingress[0].ip}'
-```
-
-
-#### 5. Generate a SSL certificate for the Redis Enterprise database
+#### 7. Generate a SSL certificate for the Redis Enterprise database
 ```
 openssl genrsa -out client.key 2048
 ```
-When running the following command, just hit ENTER for every question except to enter *.rec.&lt;ingress-external-ip&gt;.nip.io for Common Name`:
+When running the following command, just hit ENTER for every question except to enter *.rec.&lt;$INGRESS_HOST&gt;.nip.io for Common Name`:
 ```
 openssl req -new -x509 -key client.key -out client.cert -days 1826
 ```
@@ -170,7 +150,7 @@ more proxy_cert.pem
 ```
 
 
-#### 6. Create a Redis Enterprise database instance with SSL/TLS enabled
+#### 8. Create a Redis Enterprise database instance with SSL/TLS enabled
 Generate a K8 secret for the SSL/TLS certificate:
 ```
 cp client.cert cert
@@ -178,36 +158,73 @@ kubectl create secret generic client-auth-secret-redb --from-file=./cert -n redi
 ```
 Deploy a Redis Enterprise database:
 ```
-kubectl apply -f redb.yaml -n redis
+kubectl apply -f - <<EOF
+apiVersion: app.redislabs.com/v1alpha1
+kind: RedisEnterpriseDatabase
+namespace: redis
+metadata:
+  name: redis-enterprise-database
+spec:
+  memorySize: 100MB
+  tlsMode: enabled
+  clientAuthenticationCertificates:
+  - client-auth-secret-redb
+EOF
 ```
 
+#### 9. Update Ingress Gateway to include Redis Enterprise Database instance
+Define gateway for SSL access:
+```
+export INGRESS_HOST=$(kubectl -n istio-system get service istio-ingressgateway \
+       -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+export SECURE_INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway \
+       -o jsonpath='{.spec.ports[?(@.name=="https")].port}')
+export DB_PORT=$(kubectl get secrets -n redis redb-redis-enterprise-database \
+       -o json | jq '.data | {port}[] | @base64d')
 
-#### 7. Create an Ingress resource for the Redis Enterprise cluster for web UI access
-Replace &lt;ingress-external-ip&gt; with external IP of the Nginx ingress controller from step 5 in rec-ingress.yaml. Then run:
+kubect apply -f - <<EOF
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: redis-gateway
+spec:
+  selector:
+    istio: ingressgateway # use istio default ingress gateway
+  servers:
+  - port:
+      number: ${SECURE_INGRESS_PORT}
+      name: https
+      protocol: HTTPS
+    tls:
+      mode: PASSTHROUGH
+    hosts:
+    - rec-ui.${INGRESS_HOST}.nip.io
+    - redis-${DB_PORT}.demo.rec.${INGRESS_HOST}.nip.io
+EOF
 ```
-kubectl apply -f rec-ingress.yaml -n redis
+Configure routes for traffic entering via the gateway for the database:
 ```
-Grab the password for demo@redislabs.com user for accessing REC's configuration manager (CM):
-```
-kubectl get secrets -n redis rec  -o json | jq '.data | {password}[] | @base64d'
-```
-Access the CM's login page using the following URL:
-```
-https://rec.<ingress-external-ip>.nip.io:443
-
-For example:
-https://rec.34.82.246.32.nip.io:443
-```
-Log in using demo@redislabs.com and the password collected above to view the cluster information in CM.
-
-
-
-#### 8. Create an Ingress resource for external traffic going into the Redis Enterprise database
-Replace &lt;ingress-external-ip&gt; with external IP of the Nginx ingress controller from step 5 in redb-ingress.yaml.
-Replace &lt;redis-enterprise-database-port&gt; with the Redis Enterprise database's listening port in redb-ingress.yaml.
-Then run the following: 
-```
-kubectl apply -f redb-ingress.yaml -n redis
+kubectl apply -f - <<EOF
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: redis-${DB_PORT}
+spec:
+  hosts:
+  - redis-${DB_PORT}.demo.rec.${INGRESS_HOST}.nip.io
+  gateways:
+  - redis-gateway
+  tls:
+  - match:
+    - port: ${SECURE_INGRESS_PORT}
+      sniHosts:
+      - redis-${DB_PORT}.demo.rec.${INGRESS_HOST}.nip.io
+    route:
+    - destination:
+        host: redis-enterprise-database
+        port:
+          number: ${DB_PORT}
+EOF
 ```
 
 
