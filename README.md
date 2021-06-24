@@ -202,7 +202,7 @@ export INGRESS_HOST=$(kubectl -n istio-system get service istio-ingressgateway \
 export SECURE_INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway \
        -o jsonpath='{.spec.ports[?(@.name=="https")].port}')
 export DB_PORT=$(kubectl get secrets -n redis redb-redis-enterprise-database \
-       -o json | jq '.data | {port}[] | @base64d')
+       -o jsonpath="{.data.port}" | base64 --decode)
 
 kubect apply -f - <<EOF
 apiVersion: networking.istio.io/v1alpha3
@@ -253,9 +253,8 @@ EOF
 #### 11. Verify SSL/TLS connection using openssl
 Grab the password of the Redis Enterprise database:
 ```
-kubectl get secrets -n redis \
-redb-redis-enterprise-database  -o json \
-| jq '.data | {password}[] | @base64d'
+kubectl get secrets -n redis redb-redis-enterprise-database \
+-o jsonpath="{.data.password}" | base64 --decode
 ```
 Run the following to open a SSL session:
 ```
