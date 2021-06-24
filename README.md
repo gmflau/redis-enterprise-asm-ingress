@@ -47,7 +47,8 @@ curl https://storage.googleapis.com/csm-artifacts/asm/install_asm_1.9.sha256 > i
 sha256sum -c --ignore-missing install_asm.sha256
 chmod +x install_asm
 ```
-Install Anthos Service Mesh (ASM)
+Install Anthos Service Mesh (ASM)  
+Please make sure you have all the required [GCP IAM permissions](https://cloud.google.com/service-mesh/docs/installation-permissions) before running the script below.  
 ```
 ./install_asm \
   --project_id $PROJECT_ID \
