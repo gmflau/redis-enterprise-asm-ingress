@@ -20,6 +20,7 @@ The following is the high level workflow which you will follow:
 You will execute all the steps in this repo inside a GCP Cloud Shell.  
 Active cloud shell by clicking on the button:  
 ![Cloud Shell Button](./img/gcp_cloud_shell_button.png)   
+  
 You should see a Cloud Shell terminal provisioned at the bottom part of your browser:  
 ![Cloud Shell Button](./img/gcp_cloud_shell.png)  
 Then, clone this repo into your terminal:  
