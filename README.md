@@ -1,24 +1,35 @@
-# Work in Progress
-
-
-# Accessing a Redis Enterprise database from outside a GKE cluster (Using Nginx)
+# Accessing a Redis Enterprise database from outside a GKE cluster (Through Anthos Service Mesh Ingress )
 
 ## High Level Workflow
-(Run in GCP Cloud Shell)
 The following is the high level workflow which you will follow:
-1. Create a GKE cluster
-2. Create a namespace for this deployment and deploy the Redis Enterprise Operator bundle
-3. Deploy a Redis Enterprise Cluster (REC)
-4. Deploy Nginx ingress controller
-5. Generate a SSL certificate for the Redis Enterprise database
-6. Create a Redis Enterprise database instance with SSL/TLS enabled
-7. Create an Ingress resource for the Redis Enterprise cluster for web UI access
-8. Create an Ingress resource for external traffic going into the Redis Enterprise database
-9. Verify SSL/TLS connection using openssl
-10. Connect to the Redis Enterprise database over SSL/TLS via a Python program
+1. Open a GCP Cloud Shell
+2. Create a GKE cluster
+3. Install Anthos Service Mesh (ASM)
+4. Create a namespace for this deployment and deploy the Redis Enterprise Operator bundle
+5. Deploy a Redis Enterprise Cluster (REC)
+6. Deploy Ingress Gateway and Create routes for Redis Enterprise Cluster's HTTPS web access
+7. Access Redis Enterprise Cluster's console
+8. Generate a SSL certificate for the Redis Enterprise database
+9. Create a Redis Enterprise database instance with SSL/TLS enabled
+10. Update Ingress Gateway to include Redis Enterprise Database instance
+11. Verify SSL/TLS connection using openssl
+12. Connect to the Redis Enterprise database over SSL/TLS via a Python program
 
 
-#### 1. Create a GKE cluster
+#### 1. Open a GCP Cloud Shell
+You will execute all the steps in this repo inside a GCP Cloud Shell.
+Active cloud shell by clicking on the button:
+![Cloud Shell Button](./img/gcp_cloud_shell_button.png) 
+You should see a Cloud Shell terminal provisioned at the bottom part of your browser:
+![Cloud Shell Button](./img/gcp_cloud_shell.png)
+Then, clone this repo into your terminal:
+```
+git clone https://github.com/gmflau/redis-enterprise-asm-ingress
+cd redis-enterprise-asm-ingress
+```
+
+
+#### 2. Create a GKE cluster
 ```
 export PROJECT_ID=$(gcloud info --format='value(config.project)')
 export CLUSTER_NAME="glau-asm-gke-cluster"
@@ -27,7 +38,8 @@ export CLUSTER_LOCATION=us-west1-a
 ./create_cluster.sh $CLUSTER_NAME $CLUSTER_LOCATION
 ```
 
-#### 2. Install Anthos Service Mesh (ASM)
+
+#### 3. Install Anthos Service Mesh (ASM)
 Download ASM installation script
 ```
 curl https://storage.googleapis.com/csm-artifacts/asm/install_asm_1.9 > install_asm
@@ -47,10 +59,7 @@ Install Anthos Service Mesh (ASM)
 ```
 
 
-
-
-
-#### 3. Create a namespace for this deployment and deploy the Redis Enterprise Operator bundle
+#### 4. Create a namespace for this deployment and deploy the Redis Enterprise Operator bundle
 ```
 kubectl create namespace redis
 kubectl config set-context --current --namespace=redis
@@ -59,13 +68,25 @@ kubectl apply -f https://raw.githubusercontent.com/RedisLabs/redis-enterprise-k8
 ```
 
 
-#### 4. Deploy a Redis Enterprise Cluster (REC)
+#### 5. Deploy a Redis Enterprise Cluster (REC)
 ```
-kubectl apply -f rec.yaml -n redis
+kubectl apply -f - <<EOF
+apiVersion: app.redislabs.com/v1alpha1
+kind: RedisEnterpriseCluster
+namespace: redis
+metadata:
+  name: rec
+spec:
+  nodes: 3
+  persistentSpec:
+    enabled: true
+    storageClassName: "standard"
+    volumeSize: 20Gi
+EOF
 ```
 
 
-#### 5. Deploy Ingress Gateway
+#### 6. Deploy Ingress Gateway and Create routes for Redis Enterprise Cluster's HTTPS web access
 Define gateway for HTTPS access:
 ```
 export INGRESS_HOST=$(kubectl -n istio-system get service istio-ingressgateway \
@@ -118,7 +139,7 @@ EOF
 ```
 
 
-#### 6. Access Redis Enterprise Cluster's console
+#### 7. Access Redis Enterprise Cluster's console
 Grab the password for demo@redislabs.com user for accessing REC's configuration manager (CM):
 ```
 kubectl get secrets -n redis rec  -o json | jq '.data | {password}[] | @base64d'
@@ -134,7 +155,7 @@ Log in using demo@redislabs.com and the password collected above to view the clu
 
 
 
-#### 7. Generate a SSL certificate for the Redis Enterprise database
+#### 8. Generate a SSL certificate for the Redis Enterprise database
 ```
 openssl genrsa -out client.key 2048
 ```
@@ -150,7 +171,7 @@ more proxy_cert.pem
 ```
 
 
-#### 8. Create a Redis Enterprise database instance with SSL/TLS enabled
+#### 9. Create a Redis Enterprise database instance with SSL/TLS enabled
 Generate a K8 secret for the SSL/TLS certificate:
 ```
 cp client.cert cert
@@ -172,7 +193,7 @@ spec:
 EOF
 ```
 
-#### 9. Update Ingress Gateway to include Redis Enterprise Database instance
+#### 10. Update Ingress Gateway to include Redis Enterprise Database instance
 Define gateway for SSL access:
 ```
 export INGRESS_HOST=$(kubectl -n istio-system get service istio-ingressgateway \
@@ -228,7 +249,7 @@ EOF
 ```
 
 
-#### 9. Verify SSL/TLS connection using openssl
+#### 11. Verify SSL/TLS connection using openssl
 Grab the password of the Redis Enterprise database:
 ```
 kubectl get secrets -n redis \
@@ -237,9 +258,9 @@ redb-redis-enterprise-database  -o json \
 ```
 Run the following to open a SSL session:
 ```
-openssl s_client -connect redis-<redis-enterprise-database-port>.demo.rec.<ingress-external-ip>.nip.io:443 \
+openssl s_client -connect redis-${DB_PORT}.demo.rec.${INGRESS_HOST}.nip.io:${SECURE_INGRESS_PORT} \
 -key client.key -cert client.cert -CAfile ./proxy_cert.pem \
--servername redis-<redis-enterprise-database-port>.demo.rec.<ingress-external-ip>.nip.io
+-servername redis-${DB_PORT}.demo.rec.${INGRESS_HOST}.nip.io
 
 For example,
 openssl s_client -connect redis-11338.demo.rec.34.127.23.12.nip.io:443 \
@@ -252,10 +273,10 @@ Send a **PING** command by entering PING followed by a blank space before hittin
 ![openssl ping](./img/openssl_auth_ping.png)
 
 
-#### 10. Connect to the Redis Enterprise database over SSL/TLS via a Python program
+#### 12. Connect to the Redis Enterprise database over SSL/TLS via a Python program
 Run test.py to verify SSL/TLS connection:
 ```
-python test.py <ingress-external-ip> <redis-enterprise-database-port> <redis-enterprise-database-password>
+python test.py ${INGRESS_HOST} ${DB_PORT} <redis-enterprise-database-password>
 
 For example,
 python test.py 34.83.49.103 16667 QUhZiDXB 
