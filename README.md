@@ -143,7 +143,7 @@ EOF
 #### 7. Access Redis Enterprise Cluster's console
 Grab the password for demo@redislabs.com user for accessing REC's configuration manager (CM):
 ```
-kubectl get secrets -n redis rec  -o json | jq '.data | {password}[] | @base64d'
+kubectl get secrets -n redis rec -o jsonpath="{.data.password}" | base64 --decode
 ```
 Access the CM's login page using the following URL:
 ```
