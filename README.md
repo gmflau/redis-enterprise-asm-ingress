@@ -269,7 +269,7 @@ openssl s_client -connect redis-11338.demo.rec.34.127.23.12.nip.io:443 \
 ``` 
 You should see a similar output as follows. Replace &lt;redis-enterprise-database-password&gt; with your Redis Enterprise database instance's password. Make sure there is a space after the password on MacOS. See below:
 ![openssl auth](./img/openssl_auth.png)
-Send a **PING** command by entering PING followed by a blank space before hitting the **RETURN** button:
+Send a **PING** command by entering PING followed by a blank space before hitting the **RETURN** button:  
 ![openssl ping](./img/openssl_auth_ping.png)
 
 
