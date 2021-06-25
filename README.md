@@ -205,7 +205,7 @@ export SECURE_INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressga
 export DB_PORT=$(kubectl get secrets -n redis redb-redis-enterprise-database \
        -o jsonpath="{.data.port}" | base64 --decode)
 
-kubect apply -f - <<EOF
+kubectl apply -f - <<EOF
 apiVersion: networking.istio.io/v1alpha3
 kind: Gateway
 metadata:
