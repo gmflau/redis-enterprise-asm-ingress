@@ -148,10 +148,10 @@ kubectl get secrets -n redis rec -o jsonpath="{.data.password}" | base64 --decod
 ```
 Access the CM's login page using the following URL:
 ```
-https://rec.<$INGRESS_HOST>.nip.io:443
+https://rec-ui.<$INGRESS_HOST>.nip.io:443
 
 For example:
-https://rec.34.83.116.191.nip.io:443
+https://rec-ui.34.83.116.191.nip.io:443
 ```
 Log in using demo@redislabs.com and the password collected above to view the cluster information in CM.
 
