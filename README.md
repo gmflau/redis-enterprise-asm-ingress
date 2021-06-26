@@ -277,7 +277,10 @@ Send a **PING** command by entering PING followed by a blank space before hittin
 #### 12. Connect to the Redis Enterprise database over SSL/TLS via a Python program
 Run test.py to verify SSL/TLS connection:
 ```
-python test.py ${INGRESS_HOST} ${DB_PORT} <redis-enterprise-database-password>
+export DB_PASSWORD=$(kubectl get secrets -n redis redb-redis-enterprise-database \
+       -o jsonpath="{.data.password}" | base64 --decode)
+
+python test.py ${INGRESS_HOST} ${DB_PORT} ${DB_PASSWORD}
 
 For example,
 python test.py 34.83.49.103 16667 QUhZiDXB 
