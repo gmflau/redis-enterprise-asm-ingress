@@ -2,7 +2,7 @@
 
 ## High Level Workflow
 The following is the high level workflow which you will follow:
-1. Open a GCP Cloud Shell
+1. Clone this repo
 2. Create a GKE cluster
 3. Install Anthos Service Mesh (ASM)
 4. Create a namespace for this deployment and deploy the Redis Enterprise Operator bundle
@@ -16,14 +16,7 @@ The following is the high level workflow which you will follow:
 12. Connect to the Redis Enterprise database over SSL/TLS via a Python program
 
 
-#### 1. Open a GCP Cloud Shell
-You will execute all the steps in this repo inside a GCP Cloud Shell.  
-Active cloud shell by clicking on the button:  
-![Cloud Shell Button](./img/gcp_cloud_shell_button.png)   
-  
-You should see a Cloud Shell terminal provisioned at the bottom part of your browser:  
-![Cloud Shell Button](./img/gcp_cloud_shell.png)  
-Then, clone this repo into your terminal:  
+#### 1. Clone this repo
 ```
 git clone https://github.com/gmflau/redis-enterprise-asm-ingress
 cd redis-enterprise-asm-ingress
