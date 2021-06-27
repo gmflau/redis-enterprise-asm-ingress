@@ -43,6 +43,7 @@ chmod +x install_asm
 ```
 Install Anthos Service Mesh (ASM)  
 Please make sure you have all the required [GCP IAM permissions](https://cloud.google.com/service-mesh/docs/installation-permissions) before running the script below.  
+**Note:** You will need to run the command above in a Linux-based machine  
 ```
 ./install_asm \
   --project_id $PROJECT_ID \
