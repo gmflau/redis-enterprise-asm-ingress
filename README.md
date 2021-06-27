@@ -52,6 +52,7 @@ Please make sure you have all the required [GCP IAM permissions](https://cloud.g
   --output_dir ./asm-downloads \
   --enable_all
 ```
+**Note:** You will need to run the command above in a Linux-based machine  
 
 
 #### 4. Create a namespace for this deployment and deploy the Redis Enterprise Operator bundle
